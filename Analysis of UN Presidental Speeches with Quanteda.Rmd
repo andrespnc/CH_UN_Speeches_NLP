@@ -1,0 +1,189 @@
+---
+title: "Midterm"
+author: "Andrés Ponce"
+output: html_notebook
+---
+
+
+For this assignment I will examine the UN speeches from the Chilean government for two periods. The first period correspond to the military dictatorship of Augusto Pinochet 1973-1989. The second period comprises the speeches given in democracy under the mandates of Patricio Aylwin, Eduardo Frei, Ricardo Lagos, Michelle Bachelet and Sebastian Piñera (1990-2017). In total we obtained 45 documents, 28 for the democratic term and 17 for the pinochet era.
+
+```{r include=FALSE}
+library(FactoMineR)
+library(readtext)
+library(quanteda)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(rworldmap)
+library(RColorBrewer)
+library(haven)
+library(readxl)
+library(tidyverse)
+
+DATA_DIR <- "/home/andres/Desktop/Natural Language Processing/3/dataUN/" 
+ungd_files <- readtext(paste0(DATA_DIR, "Converted sessions/*"), 
+                                 docvarsfrom = "filenames", 
+                                 dvsep="_", 
+                                 docvarnames = c("Country", "Session", "Year"))
+ungd_files$doc_id <- str_replace(ungd_files$doc_id , ".txt", "") %>%
+   str_replace(. , "_\\d{2}", "")
+
+```
+
+
+```{r include=FALSE}
+ungd_corpus <- corpus(ungd_files, text_field = "text") 
+ungd_corpus<- corpus_subset(ungd_corpus, Country== "CHL")
+ungd_corpus<- corpus_subset(ungd_corpus,Year>=1973)
+
+summary(ungd_corpus)
+```
+
+```{r include=FALSE}
+#Pre preparing the corpus
+#Comparing ease of understanding and richness of vocabulary between speeches of Obama and Trump
+
+democracy <- corpus_subset(ungd_corpus, Year>=1990) #Subsetting corpus to democratic governments after Pinochet
+docvars(democracy, "president")<- paste(c(rep("Aylwin",4), rep("Frei", 6), rep("Lagos",6), rep("Bachelet",4), rep("Piñera",4), rep("Bachelet",4)))#docvars democratic presidents
+dem<-summary(democracy)
+
+
+Pinochet <- corpus_subset(ungd_corpus, Year <= 1989)
+docvars(Pinochet, "president")<- paste("Pinochet", 1:ndoc(Pinochet))#docvar for pinochet
+pin<-summary(Pinochet)
+
+
+```
+
+
+## Frecuency and length of speeches
+
+The frecuency plots provide some useful information, for example that the first speech from Pinochet, just months after the military coup is by far the longest from all of his period as head of government. the same can be said for the first speech of Aylwin as compared to the other speeches post Pinochet, which was the first after recovering democracy in 1990. 
+At the same time it is possible to say that the mean lenght for Pinochet speeches is 4651 words, Aylwin 3391, Frei 3132, Lagos 2249, Bachelet 1905, and Piñera 3004.
+
+```{r include=FALSE}
+mean(pin$Tokens)
+dem %>% select(Tokens, president) %>% filter(president=="Aylwin") %>% summary()
+dem %>% select(Tokens, president) %>% filter(president=="Frei") %>% summary()
+dem %>% select(Tokens, president) %>% filter(president=="Lagos") %>% summary()
+dem %>% select(Tokens, president) %>% filter(president=="Bachelet") %>% summary()
+dem %>% select(Tokens, president) %>% filter(president=="Piñera") %>% summary()
+
+#plot 
+democracy_count<-ggplot(data=dem, aes(x=Year, y=Tokens, group=1, color= as.factor(president)))+geom_line()+geom_point()+scale_x_continuous(labels=c(seq(1990,2017,2)), breaks=seq(1990,2017,2))+theme_bw()
+
+pinochet_count<-ggplot(data=pin, aes(x=Year, y=Tokens, group=1))+geom_line()+geom_point()+scale_x_continuous(labels=c(seq(1973,1989,2)), breaks=seq(1973,1989,2))+theme_bw()
+```
+
+```{r echo=FALSE}
+gridExtra::grid.arrange(pinochet_count, democracy_count, nrow = 2)
+```
+
+
+
+```{r include=FALSE}
+tok_democracy <- dfm(democracy, group="president", what = "word", remove=stopwords("english"), #Tokenize democratic speeches
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+               remove_hyphens = FALSE,
+              verbose = TRUE, 
+              include_docvars = TRUE)
+
+tok_pinochet <- dfm(Pinochet, what = "word", remove=stopwords("english"), #Tokenize Pinochet regime speeches
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+               remove_hyphens = FALSE,
+              verbose = TRUE, 
+              include_docvars = TRUE)
+
+```
+
+## Word Cloud of Democratic governments
+
+the word cloud for democratic governments also highlight some interesting words resonating in the speeches of each president. For example, for Aylwin the so called president of the democratic transition, the dominant words are peace, economic, social, justice and human. For Bachelet, the first Chilean female president we observe development, women, climate, sustainable and challenges. For Piñera, que first conservative president elected post Pinochet, we observe the words Chile, oportunities, free, country, order and respect. 
+
+```{r echo=FALSE}
+textplot_wordcloud(tok_democracy, min_count=30, random_order = F, comparison=T, rotation=.25, color= RColorBrewer::brewer.pal(5,"Dark2"))
+```
+## Word Cloud of Pinochet's speeches
+
+for Pinochet speeches we found words such as Chile, international, foreign nations, economic, peace, government, development, countries, rights, human, support. It is interesting that even when the dictatorship sitematically violated human rights and killed around 3000 people, words such as peace, principles, law and respect are among the most recurrent in his speeches. At the same time, I test the occurrences of words related to human rights for the Pinochet era as well as the democratic era. As a result, only the words justice, democracy, rights, citizens, truth, and humanity appear in the Pinochet speeches. Its also interesting to note that the word justice is strongly used in the earlier speeches but no at the end of his period. Something similar happens with the word humanity, it only became present at the end of his period, perhaps this is due to the international presure on human rights to give up power by the end of the 80s.
+
+On the other hand, the same collection of words were applied to the democratic governments. The findings show that Aylwin has the more number of human rights words occurrences (as defined by the dictionary), followed by Bachelet who is the only president using the word torture in her speeches. A closer look at the context of torture corroborates the use of the word in the context of human rights. 
+
+```{r echo=FALSE}
+textplot_wordcloud(tok_pinochet, min_count=40, random_order = F, rotation=.25, color= RColorBrewer::brewer.pal(5,"Dark2"))
+```
+
+```{r echo=FALSE}
+dict <- dictionary(list(human_rights = c("justice", "human_rights", "torture", "tortured", "desapeared", "dina", "cni", "democracy", "rights", "humanity", "citizens", "murder", "secret_police", "ilegal", "truth", "reparations")))
+
+
+dfm_select(tok_pinochet, case_insensitive=T,pattern = dict)
+dfm_select(tok_democracy, case_insensitive = T, pattern = dict)
+kwic(democracy, pattern= "torture*", window = 10, valuetype= "glob")
+```
+
+
+## Lexical diversity
+
+In terms of lexical diversity for the democratic governments, we account that Aylwin and Piñera have the higher values implying that their speeches are the more diverse in the use of words as compared to other presidents. On the opposite side Frei appears with the lowest value 
+```{r include=FALSE}
+div_democracy<-textstat_lexdiv(tok_democracy)
+mean(div_democracy$TTR)
+div_plot_dem<-ggplot(data=div_democracy, aes(x=document, y=TTR,group=1))+geom_line()+geom_point()+theme_bw()
+```
+
+```{r echo=FALSE}
+div_plot_dem
+```
+
+
+
+The lexical diversity of Pinochet's speeches its rather irregular, but its noticeable that his first speech is the lowest in terms of word diversity and also the longer in terms of length.  
+
+```{r include=FALSE}
+div_pin<-textstat_lexdiv(tok_pinochet)
+mean(div_pin$TTR)
+div_pin$year<-Pinochet$Year
+div_plot_pin<-ggplot(data=div_pin, aes(x=document, y=TTR, group=2))+geom_line()+geom_point()+theme_bw()+scale_x_discrete(breaks =div_pin$document[seq(1, length(div_pin$document), by=2)])
+```
+
+
+```{r echo=FALSE}
+div_plot_pin
+```
+
+
+# assessing distance between text
+
+Finally, I wanted to see the similarity between Pinochet's text and the democratic era ones. An interesting finding is that among Pinochet speeches, the one from the year of the military coup is different from all the other ones. Something similar happens with the Democratic ones, the first speech from Aylwin after regaining democracy is different than all the rest of speeches produced in democracy. 
+```{r echo=FALSE}
+similarity_pinochet<- textstat_dist(tok_pinochet)
+pin_clust<- hclust(similarity_pinochet)
+plot(pin_clust)
+```
+
+```{r include=FALSE}
+tok_democracy1 <- dfm(democracy, what = "word", remove=stopwords("english"), #Tokenize democratic speeches
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+               remove_hyphens = FALSE,
+              verbose = TRUE)
+```
+
+```{r echo=FALSE}
+similarity_democracy<- textstat_dist(tok_democracy1)
+dem_clust<- hclust(similarity_democracy)
+plot(dem_clust)
+```
