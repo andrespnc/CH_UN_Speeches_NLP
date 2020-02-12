@@ -1,5 +1,5 @@
 ---
-title: "Midterm"
+title: "Analysis of UN Presidental Speeches with Quanteda.Rmd"
 author: "Andrés Ponce"
 output: html_notebook
 ---
